@@ -52,12 +52,12 @@
 |------|------|
 | [用户与鉴权设计.md](./details/用户与鉴权设计.md) | 注册登录、JWT、游客、任务 user_id 隔离 |
 | [任务状态与任务流转.md](./details/任务状态与任务流转.md) | 状态定义、流转、前端展示 |
-| [数据库存储设计.md](./details/数据库存储设计.md) | 表结构、三列 JSON、ORM |
-| [WebSocket推送机制.md](./details/WebSocket推送机制.md) | 用户定向推送、事件类型、多实例 Redis Pub/Sub |
-| [OSS上传设计.md](./details/OSS上传设计.md) | 上传接口、OSS 配置 |
-| [RocketMQ对接设计.md](./details/RocketMQ对接设计.md) | Topic、Producer、Consumer |
+| [数据库存储设计.md](./details/数据库存储设计.md) | PostgreSQL 表结构、JSONB、ORM |
+| [WebSocket推送机制.md](./details/WebSocket推送机制.md) | 用户定向推送、Redis Pub/Sub（Phase 3） |
+| [OSS上传设计.md](./details/OSS上传设计.md) | 上传接口、OSS 配置（阿里云） |
+| [RocketMQ对接设计.md](./details/RocketMQ对接设计.md) | Topic、Producer、Consumer（阿里云） |
 | [Mock模式设计.md](./details/Mock模式设计.md) | 开发联调、模拟进度 |
-| [部署与环境变量.md](./details/部署与环境变量.md) | .env、CORS、Nginx |
+| [部署与环境变量.md](./details/部署与环境变量.md) | Docker PostgreSQL/Redis、OSS、RocketMQ、.env |
 
 ## 示例代码（`examples/`）
 

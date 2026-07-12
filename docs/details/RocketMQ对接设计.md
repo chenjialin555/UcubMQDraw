@@ -10,8 +10,8 @@
 前端 Vue
   ↓ HTTP POST 创建任务
 UcubMQDraw FastAPI
-  ↓ 写 MySQL / SQLite（开发库）
-  ↓ RocketMQ 投递任务
+  ↓ 写 PostgreSQL（本地 Docker / 生产云 PG）
+  ↓ RocketMQ 投递任务（阿里云外部服务）
 imggen / ComfyUI 消费
   ↓ RocketMQ callback
 UcubMQDraw callback consumer

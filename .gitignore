@@ -18,3 +18,9 @@ venv/
 # OS
 .DS_Store
 Thumbs.db
+
+# Docker 本地数据（不提交）
+docker/postgres/data/*
+!docker/postgres/data/.gitkeep
+docker/redis/data/*
+!docker/redis/data/.gitkeep

@@ -1,5 +1,7 @@
 # Mock 模式设计
 
+> 环境变量与基础设施 → [部署与环境变量.md](./部署与环境变量.md)
+
 ## 一、何时启用
 
 ```env
@@ -8,6 +10,7 @@ USE_MOCK=true
 
 开发联调 imggen 之前，**始终先用 Mock 跑通主链路**。
 
+**Mock 不依赖 RocketMQ**，但 **PostgreSQL / Redis Docker 仍需启动**（任务写库、后续 WS Pub/Sub 预留）。
 ## 二、与真实模式的差异
 
 | 环节 | Mock | 真实（正式版） |

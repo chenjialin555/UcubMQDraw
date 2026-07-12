@@ -18,9 +18,9 @@
 ```text
 HTTP   负责认证 + 业务命令
 WS     负责服务端事件通知；连接必须带 JWT token
-MySQL  负责任务事实（SQLite 仅开发库）
-RocketMQ 负责任务队列（不用 Redis List 替代）
-Redis Pub/Sub（可选）仅用于多实例 WS 事件分发
+PostgreSQL 负责任务与用户事实（开发 Docker / 生产云 PG）
+RocketMQ 负责任务队列（阿里云，不用 Redis 替代）
+Redis（本地 Docker）仅用于 WS Pub/Sub、限流；**不是任务队列**
 ```
 
 正式版 WebSocket 与 MVP 广播模式的核心差异：
@@ -251,9 +251,12 @@ publish Redis channel: task_events:{user_id}
 环境变量示例：
 
 ```env
-REDIS_URL=redis://127.0.0.1:6379/0
-REDIS_WS_CHANNEL_PREFIX=ucub:task_events
+REDIS_URL=redis://:ucub_redis_password@localhost:6379/0
+WS_EVENT_BUS=redis
+WS_REDIS_CHANNEL=ucub_mqdraw:ws_events
 ```
+
+配置说明 → [部署与环境变量.md §四](./部署与环境变量.md#四redis-配置说明)。
 
 ---
 

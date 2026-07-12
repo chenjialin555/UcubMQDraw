@@ -29,7 +29,7 @@
 ## 二、正式版架构
 
 ```text
-Vue + FastAPI + MySQL/SQLite + OSS + RocketMQ + JWT + WebSocket 定向推送
+Vue + FastAPI + PostgreSQL + Redis(Docker) + OSS(阿里云) + RocketMQ(阿里云) + JWT + WebSocket 定向推送
 ```
 
 边界：
@@ -110,6 +110,22 @@ backend/app/
 └── models/       task_model.py
 ```
 
+### 基础设施（项目根）
+
+```text
+docker-compose.yml              # PostgreSQL + Redis（本地 Docker）
+docker/postgres/init/01_init.sql
+backend/.env.example
+```
+
+```text
+本机：Vue、FastAPI
+Docker：PostgreSQL、Redis
+阿里云：OSS、RocketMQ
+```
+
+详见 [details/部署与环境变量.md](./details/部署与环境变量.md)。
+
 ---
 
 ## 五、工具模块模式
@@ -166,7 +182,8 @@ backend/app/
 |----|------|
 | 前端 | Vue3 + Vite + TS + Pinia + Element Plus |
 | 后端 | FastAPI + SQLAlchemy |
-| 数据库 | MySQL（生产）/ SQLite（开发） |
+| 数据库 | PostgreSQL（开发 Docker / 生产云 PG） |
+| 缓存/WS 总线 | Redis（本地 Docker，非任务队列） |
 | 文件 | 阿里云 OSS |
 | 消息 | RocketMQ → imggen |
 | 实时 | WebSocket（JWT + 用户定向推送） |
@@ -180,7 +197,7 @@ backend/app/
 | 旧代码 | 新方案 |
 |--------|--------|
 | `ucub_mqdraw/ui/*.py` | `frontend/src/tools/` |
-| `store.py` | MySQL/SQLite + `taskStore` |
+| `store.py` | PostgreSQL + `taskStore` |
 | `constants.TOOL_WORKFLOW_MAP` | 各 `tools/*.py` 组装 MQ 参数 |
 
 历史完整方案 → [archive/完整版方案归档.md](./archive/完整版方案归档.md)
