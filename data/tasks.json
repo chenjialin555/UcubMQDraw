@@ -1,0 +1,64 @@
+{
+  "tasks": {
+    "ucub_task_20260712_f00dc70054": {
+      "task_id": "ucub_task_20260712_f00dc70054",
+      "status": "failed",
+      "progress": 100,
+      "task_type": "AI生图",
+      "tool": "AI生图",
+      "compute_type": "comfy_api",
+      "workflow_template": "",
+      "created_at": "2026-07-12 00:20:31",
+      "description": "给其中的女角色增加一个合影的姐妹\n",
+      "favorite": false,
+      "input_preview": "C:\\Users\\18622\\AppData\\Local\\Temp\\gradio\\4da43d190d253040280883191da61183b5fc4eba27254ef93edf854528c1e9b8\\26_06_05_11_57_51.png",
+      "output_preview": "",
+      "error_message": "中转 API 调用失败: _ssl.c:985: The handshake operation timed out",
+      "cost_time": null,
+      "request_payload": {
+        "taskId": "ucub_task_20260712_f00dc70054",
+        "executionMode": "direct_api",
+        "provider": "gpt_image",
+        "model": "gpt-image-2",
+        "prompt": "给其中的女角色增加一个合影的姐妹\n",
+        "imageUrls": [
+          "http://object.intuly.com/public/images/ref/eefffc61_26_06_05_11_57_51.png"
+        ],
+        "seed": 21,
+        "guidanceScale": 5.5,
+        "watermark": false,
+        "bizScene": "direct_api"
+      }
+    },
+    "ucub_task_20260712_e59f1f7c8b": {
+      "task_id": "ucub_task_20260712_e59f1f7c8b",
+      "status": "running",
+      "progress": 65,
+      "task_type": "AI生图",
+      "tool": "AI生图",
+      "compute_type": "comfy_api",
+      "workflow_template": "",
+      "created_at": "2026-07-12 00:23:43",
+      "description": "给其中的女角色增加一个合影的姐妹\n",
+      "favorite": false,
+      "input_preview": "C:\\Users\\18622\\AppData\\Local\\Temp\\gradio\\4da43d190d253040280883191da61183b5fc4eba27254ef93edf854528c1e9b8\\26_06_05_11_57_51.png",
+      "output_preview": "",
+      "error_message": "",
+      "cost_time": null,
+      "request_payload": {
+        "taskId": "ucub_task_20260712_e59f1f7c8b",
+        "executionMode": "direct_api",
+        "provider": "gemini_image",
+        "model": "nano-banana-2-2k",
+        "prompt": "给其中的女角色增加一个合影的姐妹\n",
+        "imageUrls": [
+          "http://object.intuly.com/public/images/ref/5543e1aa_26_06_05_11_57_51.png"
+        ],
+        "seed": 21,
+        "guidanceScale": 5.5,
+        "watermark": false,
+        "bizScene": "direct_api"
+      }
+    }
+  }
+}
