@@ -221,8 +221,8 @@ from app.services.websocket_manager import websocket_manager
 
 
 def normalize_status(raw: str | None) -> str:
-    if raw in ("success", "completed"):
-        return "completed"
+    if raw in ("success", "succeeded", "completed"):
+        return "succeeded"
     if raw in ("failed", "error"):
         return "failed"
     return raw or "failed"
@@ -233,32 +233,45 @@ def handle_imggen_callback(message: dict) -> None:
     if not inner_task_id:
         return
 
-    task = get_by_inner_task_id(inner_task_id)  # 查 DB
+    task = get_by_inner_task_id(inner_task_id)
     if not task:
         return
 
-    updated = update_result(
-        task_id=task.task_id,
-        status=normalize_status(message.get("status")),
-        progress=100,
-        task_callback_params=message,
-        error_message=message.get("errorMsg") or "",
-        cost_time=message.get("costTime"),
-    )
-    websocket_manager.broadcast_task_update(updated)
+    if task.status in ("succeeded", "failed", "canceled"):
+        return  # 终态保护
+
+    if message.get("status") == "success":
+        updated = mark_succeeded(
+            task_id=task.task_id,
+            task_callback_params=message,
+            cost_time=message.get("costTime"),
+        )
+        websocket_manager.send_task_event(task.user_id, "task.succeeded", updated)
+    else:
+        updated = mark_failed(
+            task_id=task.task_id,
+            error_message=message.get("errorMsg") or "生成失败",
+            task_callback_params=message,
+        )
+        websocket_manager.send_task_event(task.user_id, "task.failed", updated)
 ```
 
 ## 九、task_service 中的调用
 
 ```python
+await ws.send_task_event(user_id, "task.created", task)
+update_status(task_id, "dispatching", 5)
+
 if settings.USE_MOCK:
+    update_status(task_id, "queued", 10)
     start_mock_task(task_id)
 else:
     mq_service.send(task_dispatch_params, tool_key=tool.key)
-
-task = update_status(task_id, "queued", 5)
-websocket_manager.broadcast_task_update(task)
+    task = update_status(task_id, "queued", 10)
+    await ws.send_task_event(user_id, "task.updated", task)
 ```
+
+推送使用 `send_to_user(task.user_id)`，不要全局 `broadcast`。
 
 ## 十、main.py lifespan
 

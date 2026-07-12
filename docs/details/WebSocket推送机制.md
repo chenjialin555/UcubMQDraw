@@ -1,133 +1,272 @@
 # WebSocket 推送机制
 
-> 消息格式权威定义见 [API接口.md](../API接口.md#六websocket)。
+> 消息格式与事件类型权威定义见 [API接口.md](../API接口.md#十websocket)。
 
-## 一、地址
+## 一、设计原则
 
 ```text
-ws://{host}/api/v1/ws/tasks
+HTTP   负责业务命令（创建、删除、再次生成、取消、收藏、查询）
+WS     负责服务端事件通知，不承载写操作
+MySQL  负责任务事实（SQLite 仅开发库）
+RocketMQ 负责任务队列（不用 Redis List 替代）
+Redis Pub/Sub（可选）仅用于多实例 WS 事件分发
 ```
 
-前端环境变量：`VITE_WS_URL=ws://localhost:8000/api/v1/ws/tasks`
+正式版 WebSocket 与 MVP 广播模式的核心差异：
 
-## 二、消息格式
+| 维度 | MVP（开发可简化） | 正式版 |
+|------|-------------------|--------|
+| 连接模型 | 全局 `list[WebSocket]` | `dict[userId, set[WebSocket]]` |
+| 推送范围 | 广播所有连接 | 只推任务所属 `user_id` |
+| 鉴权 | 可无 | token / Cookie 解析用户 |
+| 重连 | 固定 3 秒 | 指数退避 + 重连后 `fetchTasks` |
+| 心跳 | 可选 | `system.ping` / `system.pong` |
+| 消息类型 | 仅 `task_update` | `task.created` / `task.updated` / … |
 
-服务端只推送一种业务消息：
+---
 
-```json
-{
-  "type": "task_update",
-  "task": { }
-}
+## 二、连接地址与鉴权
+
+```text
+ws://{host}/api/v1/ws/tasks?token=<jwt>
 ```
 
-`task` 结构与 `TaskResponse` 一致（camelCase），详见 API 文档。
+或使用与 HTTP 相同的 Cookie / `Authorization` 头。
 
-客户端无需发送业务消息，保持连接即可（可 `receive_text` 维持心跳）。
+后端在 accept 前校验 token，解析出 `user_id`：
 
-## 三、前端连接（`utils/ws.ts`）
+```python
+user = await get_current_user_from_ws(websocket)
+await websocket_manager.connect(user.user_id, websocket)
+```
+
+**禁止** `/ws/connect/{user_id}`——URL 中的 user_id 可被伪造。
+
+一个用户可开多个 Tab，因此连接池为 **set**：
+
+```python
+connections: dict[str, set[WebSocket]] = {}
+```
+
+---
+
+## 三、事件类型
+
+详见 [API接口.md §10.4](../API接口.md#104-事件类型)。
+
+前端统一处理含 `task` 的事件：
 
 ```ts
-import { useTaskStore } from '@/stores/taskStore'
-
-let socket: WebSocket | null = null
-let reconnectTimer: number | null = null
-
-export function connectTaskWebSocket() {
-  const taskStore = useTaskStore()
-  const wsUrl = import.meta.env.VITE_WS_URL
-
-  if (socket) socket.close()
-
-  socket = new WebSocket(wsUrl)
-
-  socket.onmessage = event => {
-    try {
-      const data = JSON.parse(event.data)
-      if (data.type === 'task_update' && data.task) {
-        taskStore.upsertTask(data.task)
-      }
-    } catch (error) {
-      console.error('[WS] invalid message', error)
-    }
-  }
-
-  socket.onclose = () => {
-    if (reconnectTimer) window.clearTimeout(reconnectTimer)
-    reconnectTimer = window.setTimeout(() => connectTaskWebSocket(), 3000)
-  }
-
-  socket.onerror = error => console.error('[WS] error', error)
+if (message.task) {
+  taskStore.upsertTask(message.task)
 }
 ```
 
-`main.ts` 挂载后调用 `connectTaskWebSocket()`。
+删除：
 
-## 四、taskStore.upsertTask
-
-```text
-收到 task_update
-  → 列表中已有 taskId：合并更新
-  → 没有：插入列表头部
+```ts
+if (message.type === 'task.deleted' && message.taskId) {
+  taskStore.removeTask(message.taskId)
+}
 ```
 
-右栏 `TaskList` 绑定 `taskStore.filteredTasks`。**挂载时务必 `fetchTasks()`** 拉历史，防止 WS 漏消息。
+---
 
-## 五、后端 WebSocketManager
+## 四、前端连接（`utils/ws.ts`）
+
+正式版需实现：
+
+```text
+1. 建立连接（带 token）
+2. 收到事件 → 更新 taskStore
+3. 断线指数退避重连
+4. 重连 onopen 后立即 fetchTasks 补齐历史
+5. 30 秒心跳 system.ping
+```
+
+**完整可复制代码** → [examples/WebSocket推送示例.md](../examples/WebSocket推送示例.md)
+
+关键点：
+
+```ts
+socket.onopen = async () => {
+  reconnectAttempt = 0
+  await taskStore.fetchTasks()  // 修复断线期间漏消息
+  startHeartbeat()
+}
+```
+
+WebSocket 消息可能丢失，**不能**只靠 WS 保证列表一致性；数据库 + HTTP 拉取是最终真相来源。
+
+---
+
+## 五、taskStore 要点
+
+```text
+upsertTask   按 taskId 合并，并按 createdAt 排序（不要只靠 unshift）
+removeTask   响应 task.deleted
+fetchTasks   挂载时 + WS 重连后必调
+```
+
+---
+
+## 六、后端 WebSocketManager（正式版）
 
 ```python
 class WebSocketManager:
     def __init__(self):
-        self.connections: list[WebSocket] = []
+        self.connections: dict[str, set[WebSocket]] = {}
 
-    async def connect(self, websocket: WebSocket):
+    async def connect(self, user_id: str, websocket: WebSocket):
         await websocket.accept()
-        self.connections.append(websocket)
+        self.connections.setdefault(user_id, set()).add(websocket)
 
-    def disconnect(self, websocket: WebSocket):
-        if websocket in self.connections:
-            self.connections.remove(websocket)
+    def disconnect(self, user_id: str, websocket: WebSocket):
+        user_connections = self.connections.get(user_id)
+        if not user_connections:
+            return
+        user_connections.discard(websocket)
+        if not user_connections:
+            self.connections.pop(user_id, None)
 
-    async def broadcast(self, data: dict):
+    async def send_to_user(self, user_id: str, payload: dict):
+        connections = list(self.connections.get(user_id, set()))
         disconnected = []
-        for ws in self.connections:
+        for ws in connections:
             try:
-                await ws.send_text(json.dumps(data, ensure_ascii=False))
+                await ws.send_json(payload)
             except Exception:
                 disconnected.append(ws)
         for ws in disconnected:
-            self.disconnect(ws)
-
-    def broadcast_task_update(self, task):
-        data = {"type": "task_update", "task": task.to_response_dict()}
-        # 同步上下文中需调度到 event loop（BackgroundTasks / anyio.from_thread）
+            self.disconnect(user_id, ws)
 ```
 
-## 六、WebSocket API
+任务状态变化时：
+
+```python
+await websocket_manager.send_to_user(
+    task.user_id,
+    {
+        "type": "task.updated",
+        "eventId": generate_event_id(),
+        "serverTime": now_iso(),
+        "task": task.to_response_dict(),
+    },
+)
+```
+
+**不要** `broadcast` 给所有连接。
+
+---
+
+## 七、WebSocket API
 
 ```python
 @router.websocket("/api/v1/ws/tasks")
-async def task_websocket(websocket: WebSocket):
-    await websocket_manager.connect(websocket)
+async def task_websocket(websocket: WebSocket, token: str = Query(None)):
+    user = await get_current_user_from_ws(websocket, token)
+    await websocket_manager.connect(user.user_id, websocket)
     try:
         while True:
-            await websocket.receive_text()
+            raw = await websocket.receive_text()
+            msg = json.loads(raw)
+            if msg.get("type") == "system.ping":
+                await websocket.send_json({
+                    "type": "system.pong",
+                    "serverTime": now_iso(),
+                })
     except WebSocketDisconnect:
-        websocket_manager.disconnect(websocket)
+        websocket_manager.disconnect(user.user_id, websocket)
 ```
 
-## 七、谁触发推送
+客户端**不应**通过 WS 发送 `delete` / `rerun` 等业务指令。
 
-| 时机 | 调用方 |
-|------|--------|
-| 创建任务后 | `task_service.create_task` |
-| Mock 每步进度 | `mock_task_runner` |
-| imggen 回调后 | `handle_imggen_callback` |
+---
 
-## 八、注意事项
+## 八、谁触发推送
 
-1. **同步函数里广播**：Mock 跑在后台线程，需用 `asyncio.run_coroutine_threadsafe` 或统一走 async service
-2. **第一版不做复杂心跳**：断线 3 秒重连 + 手动刷新列表即可
-3. **多 Tab**：每个 Tab 各建一条 WS，广播会推给所有连接
+| 时机 | 事件 type | 调用方 |
+|------|-----------|--------|
+| 创建任务写库后 | `task.created` | `task_service.create_task` |
+| 投递 MQ 前后 | `task.updated` | `task_service.create_task` |
+| Mock 每步进度 | `task.updated` | `mock_task_runner` |
+| imggen 成功 | `task.succeeded` | `handle_imggen_callback` |
+| imggen 失败 | `task.failed` | `handle_imggen_callback` |
+| 软删除后 | `task.deleted` | `task_service.delete_task` |
+| 收藏变更 | `task.favorite_set` | `task_service.favorite_task` |
+
+链路：
+
+```text
+RocketMQ callback → 更新 DB → send_to_user(task.user_id)
+```
+
+---
+
+## 九、多实例部署
+
+单 FastAPI 进程时，内存 `WebSocketManager` 即可。
+
+生产多 worker / 多实例时会出现：
+
+```text
+用户 WS 连在实例 A
+MQ callback 被实例 B 消费
+实例 B 内存里没有该用户 WS → 推送失败
+```
+
+### 方案 A：WebSocket 单实例（初期）
+
+所有 WS 连接固定到一个 ws 服务，task event 转发给它。简单，扩展性一般。
+
+### 方案 B：Redis Pub/Sub（推荐正式版）
+
+```text
+任意实例收到 task 变更
+  ↓
+更新 DB
+  ↓
+publish Redis channel: task_events:{user_id}
+  ↓
+所有实例订阅 task_events
+  ↓
+持有该 user_id WS 连接的实例 send_to_user
+```
+
+**注意：** 此处 Redis 是 **Pub/Sub 事件总线**，不是任务队列。任务队列仍是 **RocketMQ**。
+
+环境变量示例：
+
+```env
+REDIS_URL=redis://127.0.0.1:6379/0
+REDIS_WS_CHANNEL_PREFIX=ucub:task_events
+```
+
+---
+
+## 十、幂等与终态保护
+
+回调 Consumer 必须：
+
+```text
+1. innerTaskId 唯一映射
+2. 重复回调幂等更新
+3. 终态 succeeded / failed / canceled 不允许被 running 覆盖
+4. 终态重复 success 回调可更新 callback raw，但不重复推异常状态
+```
+
+```python
+if task.status in ("succeeded", "failed", "canceled"):
+    return task  # 或仅 merge callback raw
+```
+
+---
+
+## 十一、注意事项
+
+1. **同步上下文推送**：Mock 跑在后台线程，需 `asyncio.run_coroutine_threadsafe` 或统一 async service
+2. **多 Tab**：同一 user 多个 WS，全部 `send_to_user`
+3. **开发 Mock**：`USE_MOCK=true` 时仍走 `send_to_user`，便于本地验证定向推送
+4. **不要用 Redis List 做主任务队列**：与 imggen 对接必须走 RocketMQ
 
 **完整可复制代码** → [examples/WebSocket推送示例.md](../examples/WebSocket推送示例.md)
