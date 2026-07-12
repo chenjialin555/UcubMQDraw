@@ -4,32 +4,172 @@
 
 **文档导航** → [README.md](./README.md)
 
-## 一、接口列表
+## 一、接口总览
 
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| POST | `/api/v1/uploads/images` | 上传图片 |
-| POST | `/api/v1/images/generations/tasks` | 创建任务 |
-| GET | `/api/v1/images/generations/tasks` | 任务列表（分页） |
-| GET | `/api/v1/images/generations/tasks/{taskId}` | 单条任务 |
-| DELETE | `/api/v1/images/generations/tasks/{taskId}` | 软删除任务 |
-| POST | `/api/v1/images/generations/tasks/{taskId}/rerun` | 再次生成（新建 taskId） |
-| POST | `/api/v1/images/generations/tasks/{taskId}/cancel` | 取消进行中任务 |
-| PATCH | `/api/v1/images/generations/tasks/{taskId}/favorite` | 收藏 / 取消收藏 |
-| WS | `/api/v1/ws/tasks` | 任务事件推送（只读通知） |
+### 认证
+
+| 方法 | 路径 | 阶段 | 说明 |
+|------|------|------|------|
+| POST | `/api/v1/auth/register` | P1 | 注册（手机号或邮箱 + 密码） |
+| POST | `/api/v1/auth/login` | P1 | 登录 |
+| POST | `/api/v1/auth/guest` | P1 | 游客 token（可选） |
+| GET | `/api/v1/auth/me` | P1 | 当前用户 |
+| PATCH | `/api/v1/auth/me` | P2 | 修改昵称 |
+| POST | `/api/v1/auth/password/change` | P2 | 修改密码 |
+| POST | `/api/v1/auth/logout` | P2 | 退出登录 |
+
+### 业务
+
+| 方法 | 路径 | 阶段 | 说明 |
+|------|------|------|------|
+| POST | `/api/v1/uploads/images` | P1 | 上传图片 |
+| POST | `/api/v1/images/generations/tasks` | P1 | 创建任务 |
+| GET | `/api/v1/images/generations/tasks` | P1 | 任务列表（分页，当前用户） |
+| GET | `/api/v1/images/generations/tasks/{taskId}` | P1 | 单条任务 |
+| DELETE | `/api/v1/images/generations/tasks/{taskId}` | P2 | 软删除任务 |
+| POST | `/api/v1/images/generations/tasks/{taskId}/rerun` | P2 | 再次生成 |
+| POST | `/api/v1/images/generations/tasks/{taskId}/cancel` | P2 | 取消任务 |
+| PATCH | `/api/v1/images/generations/tasks/{taskId}/favorite` | P2 | 收藏 |
+| WS | `/api/v1/ws/tasks?token=<jwt>` | P1 | 任务事件推送（心跳/Redis 为 P2/P3） |
+
+设计细节 → [details/用户与鉴权设计.md](./details/用户与鉴权设计.md)（含 **Phase 1/2/3** 分期）
 
 **边界原则：**
 
 ```text
-HTTP  负责业务命令（创建、删除、再次生成、取消、收藏、查询）
-WS    负责服务端事件通知，不承载写操作
+HTTP  负责认证 + 业务命令
+WS    只推事件通知；user_id 从 token 解析，禁止 URL 传 user_id
 ```
 
-任务队列走 **RocketMQ**，不走 Redis List。Redis（可选）仅用于多实例 WebSocket 事件分发，见 [WebSocket推送机制.md](./details/WebSocket推送机制.md#九多实例部署)。
+任务队列走 **RocketMQ**。Redis Pub/Sub 仅可选用于多实例 WS，见 [WebSocket推送机制.md](./details/WebSocket推送机制.md#九多实例部署)。
 
 ---
 
-## 二、上传图片
+## 二、认证接口
+
+> 账号体系详见 [用户与鉴权设计.md](./details/用户与鉴权设计.md)。
+
+除 `/auth/register`、`/auth/login`、`/auth/guest` 外，业务接口均需：
+
+```http
+Authorization: Bearer <accessToken>
+```
+
+### 2.1 注册
+
+```http
+POST /api/v1/auth/register
+Content-Type: application/json
+
+{
+  "account": "13800138000",
+  "password": "12345678"
+}
+```
+
+`account` 可为手机号或邮箱，后端自动识别。密码 8~32 位。
+
+响应：
+
+```json
+{
+  "accessToken": "eyJ...",
+  "tokenType": "Bearer",
+  "expiresIn": 604800,
+  "user": {
+    "userId": "user_20260712_ab12cd34",
+    "userType": "phone",
+    "phone": "138****8000",
+    "email": null,
+    "phoneVerified": false,
+    "emailVerified": false,
+    "nickname": "用户482913",
+    "avatarUrl": null
+  }
+}
+```
+
+### 2.2 登录
+
+```http
+POST /api/v1/auth/login
+Content-Type: application/json
+
+{
+  "account": "test@example.com",
+  "password": "12345678"
+}
+```
+
+响应结构同注册。失败统一：
+
+```json
+{
+  "code": "INVALID_LOGIN",
+  "message": "账号或密码错误"
+}
+```
+
+### 2.3 游客登录
+
+```http
+POST /api/v1/auth/guest
+```
+
+响应 `user.userId` 固定为 `user_guest_public`，`userType` 为 `guest`。
+
+### 2.4 当前用户
+
+```http
+GET /api/v1/auth/me
+Authorization: Bearer <token>
+```
+
+### 2.5 修改昵称（Phase 2）
+
+```http
+PATCH /api/v1/auth/me
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{ "nickname": "我的昵称" }
+```
+
+游客不可用（`GUEST_NOT_ALLOWED`）。
+
+### 2.6 修改密码（Phase 2）
+
+```http
+POST /api/v1/auth/password/change
+Authorization: Bearer <token>
+
+{ "oldPassword": "...", "newPassword": "..." }
+```
+
+### 2.7 退出登录（Phase 2）
+
+```http
+POST /api/v1/auth/logout
+Authorization: Bearer <token>
+```
+
+前端删除 `access_token` 并断开 WS 即可。
+
+### 2.8 认证错误码
+
+| code | 说明 |
+|------|------|
+| `INVALID_ACCOUNT` | 手机号或邮箱格式错误 |
+| `PASSWORD_TOO_SHORT` | 密码至少 8 位 |
+| `ACCOUNT_EXISTS` | 已注册 |
+| `INVALID_LOGIN` | 账号或密码错误 |
+| `UNAUTHORIZED` | 未登录 / token 无效 |
+| `TOKEN_EXPIRED` | token 过期 |
+| `GUEST_NOT_ALLOWED` | 游客不可执行 |
+
+---
+
+## 三、上传图片
 
 ```http
 POST /api/v1/uploads/images
@@ -51,7 +191,7 @@ Authorization: Bearer <token>    # 正式版需登录态
 
 ---
 
-## 三、创建任务
+## 四、创建任务
 
 ```http
 POST /api/v1/images/generations/tasks
@@ -142,7 +282,7 @@ Authorization: Bearer <token>
 
 ---
 
-## 四、查询任务列表
+## 五、查询任务列表
 
 ```http
 GET /api/v1/images/generations/tasks?page=1&pageSize=20&status=running
@@ -166,13 +306,13 @@ Authorization: Bearer <token>
 }
 ```
 
-- 只返回**当前用户**、**未软删除**（`deleted_at IS NULL`）的任务
+- 只返回**当前 token 对应 user_id**、**未软删除**的任务
 - `items` 内元素结构与 `TaskResponse` 一致
 - 按 `createdAt` 倒序
 
 ---
 
-## 五、查询单条任务
+## 六、查询单条任务
 
 ```http
 GET /api/v1/images/generations/tasks/{taskId}
@@ -181,9 +321,11 @@ Authorization: Bearer <token>
 
 校验任务属于当前用户，否则 404。
 
+校验 `task.user_id === token.sub`，否则 404。
+
 ---
 
-## 六、删除任务（软删除）
+## 七、删除任务（软删除，Phase 2）
 
 ```http
 DELETE /api/v1/images/generations/tasks/{taskId}
@@ -202,7 +344,7 @@ Authorization: Bearer <token>
 
 ---
 
-## 七、再次生成
+## 八、再次生成（Phase 2）
 
 ```http
 POST /api/v1/images/generations/tasks/{taskId}/rerun
@@ -222,7 +364,7 @@ Authorization: Bearer <token>
 
 ---
 
-## 八、取消任务
+## 九、取消任务（Phase 2）
 
 ```http
 POST /api/v1/images/generations/tasks/{taskId}/cancel
@@ -237,7 +379,7 @@ Authorization: Bearer <token>
 
 ---
 
-## 九、收藏
+## 十、收藏（Phase 2）
 
 ```http
 PATCH /api/v1/images/generations/tasks/{taskId}/favorite
@@ -249,11 +391,18 @@ Authorization: Bearer <token>
 
 响应：更新后的 `TaskResponse`。WS 推 `task.favorite_set`（可选，前端也可仅依赖 HTTP 响应）。
 
+游客不可用（`GUEST_NOT_ALLOWED`）。
+
 ---
 
-## 十、WebSocket
+## 十一、WebSocket
 
-### 10.1 连接地址
+> **Phase 1：** `task.created` / `task.updated` / `task.succeeded` / `task.failed` / `task.deleted`（可选）+ 断线重连后 `fetchTasks`。
+> **Phase 2：** 心跳、`task.favorite_set`、游客过滤。
+> **Phase 3：** Redis Pub/Sub 多实例。
+> 最小前端示例 → [WebSocket推送示例.md](./examples/WebSocket推送示例.md#二最小可读版先看这个)。
+
+### 11.1 连接地址
 
 ```text
 ws://{host}/api/v1/ws/tasks?token=<jwt>
@@ -263,14 +412,14 @@ ws://{host}/api/v1/ws/tasks?token=<jwt>
 
 **禁止**使用 `/ws/connect/{user_id}` 这类 URL 传用户身份——`user_id` 必须由后端从 token 解析。
 
-### 10.2 职责边界
+### 11.2 职责边界
 
 ```text
 WebSocket 只接收服务端事件通知
 创建 / 删除 / 再次生成 / 取消 / 收藏 → 全部走 HTTP
 ```
 
-### 10.3 事件 envelope
+### 11.3 事件 envelope
 
 ```json
 {
@@ -294,18 +443,18 @@ WebSocket 只接收服务端事件通知
 }
 ```
 
-### 10.4 事件类型
+### 11.4 事件类型
 
-| type | 说明 |
-|------|------|
-| `task.created` | 任务创建后 |
-| `task.updated` | 状态 / 进度变化 |
-| `task.succeeded` | 生成成功（终态） |
-| `task.failed` | 生成失败（终态） |
-| `task.deleted` | 软删除成功，见 §10.5 |
-| `task.favorite_set` | 收藏变化（可选） |
-| `system.pong` | 心跳响应 |
-| `system.error` | WS 指令错误 |
+| type | 说明 | 阶段 |
+|------|------|------|
+| `task.created` | 任务创建后 | P1 |
+| `task.updated` | 状态 / 进度变化 | P1 |
+| `task.succeeded` | 生成成功（终态） | P1 |
+| `task.failed` | 生成失败（终态） | P1 |
+| `task.deleted` | 软删除成功，见 §11.5 | P1 可选 |
+| `task.favorite_set` | 收藏变化 | P2 |
+| `system.pong` | 心跳响应 | P2 |
+| `system.error` | WS 指令错误 | P2 |
 
 前端处理建议：
 
@@ -321,7 +470,7 @@ if (message.type === 'task.deleted' && message.taskId) {
 }
 ```
 
-### 10.5 删除事件
+### 11.5 删除事件
 
 ```json
 {
@@ -332,7 +481,7 @@ if (message.type === 'task.deleted' && message.taskId) {
 }
 ```
 
-### 10.6 客户端心跳
+### 11.6 客户端心跳（Phase 2）
 
 客户端可发送：
 
@@ -349,7 +498,7 @@ if (message.type === 'task.deleted' && message.taskId) {
 }
 ```
 
-### 10.7 断线恢复
+### 11.7 断线恢复
 
 WebSocket **不是可靠消息队列**。前端重连成功后**必须**调用 `GET /tasks` 补齐断线期间漏掉的状态变化。
 
@@ -357,7 +506,7 @@ WebSocket **不是可靠消息队列**。前端重连成功后**必须**调用 `
 
 ---
 
-## 十一、任务状态枚举
+## 十二、任务状态枚举
 
 统一使用以下值，**不要混用** `success` / `succeeded` / `completed`：
 
@@ -377,7 +526,34 @@ imggen MQ 回调仍可能使用 `success`（见 [mq_contract.md](./mq_contract.m
 
 ---
 
-## 十二、前端 TypeScript 类型（参考）
+## 十三、前端 TypeScript 类型（参考）
+
+```ts
+export type UserType = 'phone' | 'email' | 'guest'
+
+export interface CurrentUser {
+  userId: string
+  userType: UserType
+  phone: string | null
+  email: string | null
+  phoneVerified: boolean
+  emailVerified: boolean
+  nickname: string
+  avatarUrl: string | null
+}
+
+export interface AuthResponse {
+  accessToken: string
+  tokenType: 'Bearer'
+  expiresIn: number
+  user: CurrentUser
+}
+
+export interface RegisterLoginRequest {
+  account: string
+  password: string
+}
+```
 
 ```ts
 export type TaskStatus =
@@ -427,7 +603,7 @@ export interface WsTaskEvent {
 
 ---
 
-## 十三、imggen 回调（后端内部，前端不调用）
+## 十四、imggen 回调（后端内部，前端不调用）
 
 MQ 消息体存入 `task_callback_params`，典型字段：
 
@@ -452,7 +628,7 @@ callback consumer → get_by_inner_task_id
 
 ---
 
-## 十四、错误响应
+## 十五、错误响应
 
 HTTP 4xx/5xx：
 
@@ -470,7 +646,7 @@ HTTP 4xx/5xx：
 |----|------|
 | 400 | 参数校验失败 |
 | 401 | 未登录 / token 无效 |
-| 403 | 无权操作他人任务 |
-| 404 | 任务不存在或已删除 |
+| 403 | 游客不允许（如收藏、改密码） |
+| 404 | 任务不存在或不属于当前用户 |
 | 409 | 终态任务不可取消 |
 | 500 | 服务端异常 |

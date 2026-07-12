@@ -1,24 +1,25 @@
 # 前端 HTTP 封装示例
 
-> 本文提供可复制的 `src/api/http.ts`、`src/api/task.ts`、`src/api/upload.ts` 示例。
-> API 字段以 [../API接口.md](../API接口.md) 为唯一权威。
+> 本文提供可复制的 `http.ts`、`auth.ts`、`task.ts` 示例。
+> **先实现 Phase 1**（register/login/guest/me + 带 token 的 task API），Phase 2 再补改密码等。
+> 阅读顺序 → [代码阅读指南.md](../代码阅读指南.md)
 
 ## 一、目录位置
 
 ```text
 frontend/src/api/
 ├── http.ts
+├── auth.ts
 ├── task.ts
 └── upload.ts
 ```
 
-职责：
-
 | 文件 | 职责 |
 |------|------|
-| `http.ts` | axios 实例、baseURL、超时、统一错误提取 |
-| `task.ts` | 任务创建、列表、详情、第二版操作接口 |
-| `upload.ts` | 图片上传接口 |
+| `http.ts` | axios 实例、**自动带 Authorization**、统一错误提取 |
+| `auth.ts` | 注册、登录、游客、me、改昵称、改密码 |
+| `task.ts` | 任务 CRUD 与操作 |
+| `upload.ts` | 图片上传 |
 
 ---
 
@@ -83,6 +84,14 @@ export const http = axios.create({
   timeout: 30000,
 })
 
+http.interceptors.request.use(config => {
+  const token = localStorage.getItem('access_token')
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`
+  }
+  return config
+})
+
 http.interceptors.response.use(
   response => response.data,
   (error: AxiosError<ApiErrorPayload>) => {
@@ -96,11 +105,48 @@ http.interceptors.response.use(
 1. 成功响应直接返回 `response.data`，业务代码不需要再写 `.data`。
 2. 失败响应统一转为 `Error`，便于 `ElMessage.error(err.message)`。
 3. 错误优先级：`message` → `detail` → `error` → axios message。
-4. 后端 FastAPI 常见错误字段是 `detail`（见 [API接口.md](../API接口.md#十错误响应)）。
+4. 后端 FastAPI 常见错误字段是 `detail` 或 `{ code, message }`（见 [API接口.md](../API接口.md#十五错误响应)）。
 
 ---
 
-## 四、任务类型建议
+## 四、`src/api/auth.ts`
+
+```ts
+import { http } from './http'
+import type { AuthResponse, CurrentUser, RegisterLoginRequest } from '@/types/auth'
+
+export function register(data: RegisterLoginRequest): Promise<AuthResponse> {
+  return http.post('/api/v1/auth/register', data)
+}
+
+export function login(data: RegisterLoginRequest): Promise<AuthResponse> {
+  return http.post('/api/v1/auth/login', data)
+}
+
+export function loginAsGuest(): Promise<AuthResponse> {
+  return http.post('/api/v1/auth/guest')
+}
+
+export function fetchMe(): Promise<CurrentUser> {
+  return http.get('/api/v1/auth/me')
+}
+
+export function updateNickname(nickname: string): Promise<CurrentUser> {
+  return http.patch('/api/v1/auth/me', { nickname })
+}
+
+export function changePassword(oldPassword: string, newPassword: string) {
+  return http.post('/api/v1/auth/password/change', { oldPassword, newPassword })
+}
+
+export function logout() {
+  return http.post('/api/v1/auth/logout')
+}
+```
+
+---
+
+## 五、任务类型建议
 
 建议集中放在 `src/types/task.ts`：
 
@@ -152,9 +198,9 @@ export interface TaskListResponse {
 
 ---
 
-## 五、`src/api/task.ts`
+## 六、`src/api/task.ts`
 
-### 5.1 核心接口
+### 6.1 核心接口
 
 ```ts
 import { http } from './http'
@@ -206,7 +252,7 @@ export function favoriteTask(
 }
 ```
 
-### 5.2 边界说明
+### 6.2 边界说明
 
 ```text
 创建 / 删除 / 再次生成 / 取消 / 收藏 → HTTP
@@ -216,7 +262,7 @@ export function favoriteTask(
 
 ---
 
-## 六、`src/api/upload.ts`
+## 七、`src/api/upload.ts`
 
 ```ts
 import { http } from './http'
@@ -243,13 +289,21 @@ export function uploadImage(file: File): Promise<UploadResult> {
 }
 ```
 
-请求/响应契约 → [API接口.md](../API接口.md#二上传图片)。
+请求/响应契约 → [API接口.md](../API接口.md#三上传图片)。
 
 组件侧用法 → [OSS上传示例.md](./OSS上传示例.md)。
 
 ---
 
-## 七、在页面中的典型用法
+## 八、authStore 与 bootstrap（Phase 1 精简）
+
+Phase 1 只需：`login` / `loginAsGuest` / `fetchMe` / `logout`（前端清 token）。
+
+完整 bootstrap 与 authStore 见 [用户与鉴权设计.md §十六](../details/用户与鉴权设计.md#十六前端改造)。**不要一上来抄 Phase 2 的改昵称/改密码。**
+
+---
+
+## 九、在页面中的典型用法
 
 ```ts
 import { ElMessage } from 'element-plus'
@@ -278,7 +332,7 @@ async function submit() {
 
 ---
 
-## 八、与现行规范的边界
+## 十、与现行规范的边界
 
 | 项 | 说明 |
 |----|------|
@@ -289,7 +343,7 @@ async function submit() {
 
 ---
 
-## 九、自检清单
+## 十一、自检清单
 
 ```text
 □ baseURL 不含 /api/v1 前缀

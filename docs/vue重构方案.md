@@ -29,39 +29,58 @@
 ## 二、正式版架构
 
 ```text
-Vue 前端
-  ├─ HTTP：创建、删除、再次生成、取消、收藏、查询历史
-  └─ WebSocket：只接收任务事件通知
-
-FastAPI 后端
-  ├─ 写 MySQL（生产）/ SQLite（开发库）
-  ├─ OSS 上传
-  ├─ RocketMQ 投递 imggen
-  └─ callback consumer → 更新 DB → WS 定向推送
-
-RocketMQ  任务队列（不用 Redis List 替代）
-Redis Pub/Sub（可选）  多实例 WebSocket 事件分发
+Vue + FastAPI + MySQL/SQLite + OSS + RocketMQ + JWT + WebSocket 定向推送
 ```
 
-**边界：**
+边界：
 
-- 前端只传 `toolKey` + `params`
-- 后端 `tools/xxx.py` 负责校验、组装 MQ 参数
-- **HTTP 负责业务命令，WebSocket 只推事件**
-- 任务状态以 DB 为准，WS 重连后必须 `fetchTasks` 补齐
+- 轻量账号：手机号 / 邮箱 + 密码，JWT 7 天
+- 游客可选：`user_guest_public`，前端 localStorage 过滤任务
+- 任务按 `user_id` 隔离；WS 从 token 解析用户
+
+详见 [details/用户与鉴权设计.md](./details/用户与鉴权设计.md)。
 
 ---
 
-## 三、开发阶段
+## 三、正式版分三期
+
+> **架构方向是正式版，实现按三期推进。** 详见 [代码阅读指南.md](./代码阅读指南.md)。
+
+### Phase 1：可读正式版
 
 ```text
-阶段 1：Mock 主链路（db + 上传 + WS + 风格迁移）
-阶段 2：局部重绘 + MaskEditor
-阶段 3：OSS + RocketMQ，关闭 Mock
-阶段 4：用户鉴权 + 定向 WS + 分页 + 删除/再次生成/取消
+用户：register / login / guest / me + JWT + tasks.user_id
+任务：POST 创建、GET 列表、GET 单条
+WS：token 鉴权、send_to_user、最小 onmessage + 断线重连
+工具：风格迁移、局部重绘（Mock 主链路）
 ```
 
-`USE_MOCK=true` 本地开发可跳过 MQ，但 WS 仍建议按 `user_id` 定向推送，便于与正式版一致。
+### Phase 2：体验增强
+
+```text
+改昵称 / 改密码
+DELETE / rerun / cancel / favorite
+游客 guest_task_ids、WS 拆文件、心跳
+局部重绘 MaskEditor 完善
+```
+
+### Phase 3：生产增强
+
+```text
+OSS + RocketMQ 关 Mock
+Redis Pub/Sub 多实例 WS
+登录限流、refreshToken、分页与筛选完善
+```
+
+### 原 Mock 联调阶段（与 Phase 并行）
+
+```text
+阶段 A：Mock 主链路（db + 上传 + WS + 风格迁移）
+阶段 B：局部重绘
+阶段 C：接 OSS + MQ
+```
+
+`USE_MOCK=true` 本地可跳过 MQ；WS 仍建议 `send_to_user`。
 
 ---
 
@@ -71,12 +90,13 @@ Redis Pub/Sub（可选）  多实例 WebSocket 事件分发
 
 ```text
 frontend/src/
-├── api/          http.ts, task.ts, upload.ts
-├── tools/        每个工具一个目录：Form + Preview(可选) + tool.ts
-├── components/   ImageUploader, MaskEditor, TaskList, TaskCard
-├── stores/       taskStore.ts
+├── api/          http.ts, auth.ts, task.ts, upload.ts
+├── ws/           taskWsMessages / taskWsHandlers / taskWsClient
+├── tools/        每个工具一个目录
+├── stores/       authStore.ts, taskStore.ts
+├── components/   TaskList, TaskCard, …
 ├── pages/        HomePage.vue
-└── utils/        ws.ts
+└── bootstrap.ts  # Phase 1：guest → connect WS
 ```
 
 ### 后端
@@ -84,7 +104,7 @@ frontend/src/
 ```text
 backend/app/
 ├── db.py
-├── api/          task_api, upload_api, websocket_api
+├── api/          auth_api, task_api, upload_api, websocket_api
 ├── tools/        每个工具一个 .py + registry.py
 ├── services/     task_service, upload_service, mq_service, mock_task_runner, websocket_manager
 └── models/       task_model.py
@@ -149,7 +169,8 @@ backend/app/
 | 数据库 | MySQL（生产）/ SQLite（开发） |
 | 文件 | 阿里云 OSS |
 | 消息 | RocketMQ → imggen |
-| 实时 | WebSocket（用户定向推送） |
+| 实时 | WebSocket（JWT + 用户定向推送） |
+| 鉴权 | JWT（passlib bcrypt + python-jose） |
 | 多实例 WS | Redis Pub/Sub（可选） |
 
 ---

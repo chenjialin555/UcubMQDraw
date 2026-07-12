@@ -1,27 +1,28 @@
 # UcubMQDraw 文档导航
 
-> 日常开发看短文档；遇到具体问题查专题；需要复制代码看 examples。
+> 日常开发看短文档；**不知道从哪读** → [代码阅读指南.md](./代码阅读指南.md)。
 
 ## 日常开发必看
 
 | 文档 | 用途 |
 |------|------|
-| [vue重构方案.md](./vue重构方案.md) | 项目整体规范、MVP 范围、目录结构、开发规则 |
-| [开发入门.md](./开发入门.md) | 启动项目、目录说明、主链路 |
-| [新增工具开发指南.md](./新增工具开发指南.md) | **最常看**：新增一个生图工具该改哪些文件 |
-| [API接口.md](./API接口.md) | 前后端 HTTP / WebSocket 契约（**字段唯一权威**） |
-| [ui_design.md](./ui_design.md) | 三栏布局、组件树、CSS Token、交互验收 |
+| [代码阅读指南.md](./代码阅读指南.md) | **推荐阅读顺序**、分期实现、暂时别先看什么 |
+| [vue重构方案.md](./vue重构方案.md) | 项目整体规范、分期、目录结构 |
+| [开发入门.md](./开发入门.md) | 启动、目录、主链路 |
+| [新增工具开发指南.md](./新增工具开发指南.md) | **最常看**：新增工具改哪些文件 |
+| [API接口.md](./API接口.md) | HTTP / WS 契约（**字段唯一权威**） |
+| [ui_design.md](./ui_design.md) | 三栏布局、组件树、交互验收 |
 
 ## 阅读路径
 
 ### 新人
 
 ```text
-1. 开发入门.md
-2. vue重构方案.md
-3. 新增工具开发指南.md
-4. API接口.md
-5. ui_design.md（做前端页面时）
+1. 代码阅读指南.md
+2. 开发入门.md
+3. vue重构方案.md
+4. 新增工具开发指南.md
+5. API接口.md
 ```
 
 ### 只做前端工具
@@ -38,16 +39,18 @@
 
 ```text
 1. 开发入门.md
-2. details/任务状态与任务流转.md  +  examples/任务状态与流转示例.md
-3. details/RocketMQ对接设计.md      +  examples/RocketMQ对接示例.md
-4. details/WebSocket推送机制.md     +  examples/WebSocket推送示例.md
-5. details/OSS上传设计.md           +  examples/OSS上传示例.md
+2. details/用户与鉴权设计.md
+3. details/任务状态与任务流转.md  +  examples/任务状态与流转示例.md
+4. details/RocketMQ对接设计.md      +  examples/RocketMQ对接示例.md
+5. details/WebSocket推送机制.md     +  examples/WebSocket推送示例.md
+6. details/OSS上传设计.md           +  examples/OSS上传示例.md
 ```
 
 ## 专题细节（`details/`）
 
 | 文档 | 内容 |
 |------|------|
+| [用户与鉴权设计.md](./details/用户与鉴权设计.md) | 注册登录、JWT、游客、任务 user_id 隔离 |
 | [任务状态与任务流转.md](./details/任务状态与任务流转.md) | 状态定义、流转、前端展示 |
 | [数据库存储设计.md](./details/数据库存储设计.md) | 表结构、三列 JSON、ORM |
 | [WebSocket推送机制.md](./details/WebSocket推送机制.md) | 用户定向推送、事件类型、多实例 Redis Pub/Sub |
@@ -67,7 +70,7 @@
 | [MaskEditor示例.md](./examples/MaskEditor示例.md) | 蒙版编辑与上传 |
 | [OSS上传示例.md](./examples/OSS上传示例.md) | oss_client、upload_api、ImageUploader |
 | [RocketMQ对接示例.md](./examples/RocketMQ对接示例.md) | Producer、Consumer、回调处理 |
-| [WebSocket推送示例.md](./examples/WebSocket推送示例.md) | ws.ts、websocket_manager、正式版 taskStore |
+| [WebSocket推送示例.md](./examples/WebSocket推送示例.md) | **§二最小版** + 拆文件 ws/ + 分期增强 |
 | [任务状态与流转示例.md](./examples/任务状态与流转示例.md) | TaskCard、状态机、Mock 步进 |
 
 ## 归档

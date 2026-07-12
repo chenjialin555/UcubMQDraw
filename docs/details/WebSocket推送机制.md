@@ -1,12 +1,23 @@
 # WebSocket 推送机制
 
-> 消息格式与事件类型权威定义见 [API接口.md](../API接口.md#十websocket)。
+> 消息格式见 [API接口.md](../API接口.md#十一websocket)。
+> **阅读：** [代码阅读指南.md](../代码阅读指南.md) → [WebSocket推送示例 §二最小版](../examples/WebSocket推送示例.md#二最小可读版先看这个)
+
+## 〇、分期阅读
+
+| 阶段 | 看什么 | 先别看 |
+|------|--------|--------|
+| Phase 1 | §二鉴权 + §六 Manager + 示例 §二最小版 + §四拆文件 | Redis、心跳 |
+| Phase 2 | 游客过滤、心跳、task.deleted | — |
+| Phase 3 | §九多实例 Redis Pub/Sub | — |
+
+---
 
 ## 一、设计原则
 
 ```text
-HTTP   负责业务命令（创建、删除、再次生成、取消、收藏、查询）
-WS     负责服务端事件通知，不承载写操作
+HTTP   负责认证 + 业务命令
+WS     负责服务端事件通知；连接必须带 JWT token
 MySQL  负责任务事实（SQLite 仅开发库）
 RocketMQ 负责任务队列（不用 Redis List 替代）
 Redis Pub/Sub（可选）仅用于多实例 WS 事件分发
@@ -40,7 +51,9 @@ user = await get_current_user_from_ws(websocket)
 await websocket_manager.connect(user.user_id, websocket)
 ```
 
-**禁止** `/ws/connect/{user_id}`——URL 中的 user_id 可被伪造。
+**禁止** `/ws/connect/{user_id}`——`user_id` 必须从 JWT `sub` 解析。
+
+游客 token 的 `sub` 为 `user_guest_public`。后端仍会推送该用户任务事件；**前端需按 localStorage `guest_task_ids` 过滤**。见 [用户与鉴权设计.md §十三](./用户与鉴权设计.md#十三游客模式)。
 
 一个用户可开多个 Tab，因此连接池为 **set**：
 
