@@ -21,15 +21,11 @@
   "innerTaskId": "inner_20260711_00001",
   "modelName": "SDXL/Flux",
   "prompt": "高清商品图，8K，写实",
-  "negativePrompt": "模糊，水印，低画质",
   "width": 1024,
   "height": 1024,
   "batchSize": 2,
   "refImageList": ["oss://ucub-img/ref/base.jpg", "oss://ucub-img/ref/style_ref.jpg"],
   "timeout": 300,
-  "workflowJson": "ComfyUI风格迁移导出完整JSON字符串",
-  "styleStrength": 0.75,
-  "computeType": "comfy_api"
 }
 ```
 
@@ -44,23 +40,16 @@
   "innerTaskId": "inner_20260711_00002",
   "modelName": "SDXL/Flux",
   "prompt": "墙面更换大理石材质，细腻石材纹理",
-  "negativePrompt": "色差严重、破损、脏污",
   "width": 1024,
   "height": 1024,
   "batchSize": 1,
   "refImageList": ["oss://ucub-img/ref/base_render.jpg"],
   "maskOssUrl": "oss://ucub-img/mask/mask_20260711_00002.png",
   "timeout": 300,
-  "workflowJson": "ComfyUI局部重绘导出完整JSON字符串",
-  "maskBlurRadius": 6,
-  "denoiseStrength": 0.8,
-  "computeType": "comfy_gpt"
 }
 ```
 
 - `maskOssUrl`：Gradio 画笔圈选蒙版上传 OSS 后的地址
-- `maskBlurRadius`：蒙版边缘羽化像素
-- `denoiseStrength`：重绘去噪强度 0~1
 - `refImageList`：仅填入基底原图
 
 ## 三、统一回调（ucub_imggen_callback）
