@@ -20,7 +20,8 @@ UcubMQDraw callback consumer
 前端创作记录刷新
 ```
 
-`USE_MOCK=true` 时跳过 Producer / Consumer，Mock 线程模拟进度。
+本地没有真实 imggen 时，用 **imggen-stub** 消费同一 Task Topic、投递 Callback Topic。  
+**禁止**在 UcubMQDraw 中用 `USE_MOCK` 跳过 MQ。详见 [imggen-stub联调模式设计.md](./imggen-stub联调模式设计.md)。
 
 ---
 
@@ -110,15 +111,31 @@ Producer 要点：单例、ACL、`send_sync` status==0、指数退避重试、sh
 
 ## 六、Callback Consumer
 
-`main.py` lifespan 启动（非 Mock）：
+`main.py` lifespan 在 MQ 配置完整时启动：
 
 ```python
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    start_callback_consumer()
+    if mq_enabled():
+        start_callback_consumer()
     yield
     rocketmq_client.shutdown()
 ```
+
+`mq_enabled()` 只判断 NameServer / 密钥等是否齐全，**不看 `USE_MOCK`**。
+
+---
+
+## 六·附、imggen-stub 联调
+
+当真实 imggen 未部署时，启动 `imggen-stub/`：
+
+```text
+消费：ROCKETMQ_TOPIC_TASK
+生产：ROCKETMQ_TOPIC_CALLBACK
+```
+
+UcubMQDraw 业务代码不变。示例 → [examples/imggen-stub示例.md](../examples/imggen-stub示例.md)
 
 ---
 

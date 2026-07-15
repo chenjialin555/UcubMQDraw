@@ -202,9 +202,9 @@ async def task_websocket(websocket: WebSocket, token: str = Query(None)):
 |------|-----------|--------|
 | 创建任务写库后 | `task.created` | `task_service.create_task` |
 | 投递 MQ 前后 | `task.updated` | `task_service.create_task` |
-| Mock 每步进度 | `task.updated` | `mock_task_runner` |
-| imggen 成功 | `task.succeeded` | `handle_imggen_callback` |
-| imggen 失败 | `task.failed` | `handle_imggen_callback` |
+| imggen / stub 进度（可选） | `task.updated` | `handle_imggen_callback` |
+| imggen / stub 成功 | `task.succeeded` | `handle_imggen_callback` |
+| imggen / stub 失败 | `task.failed` | `handle_imggen_callback` |
 | 软删除后 | `task.deleted` | `task_service.delete_task` |
 | 收藏变更 | `task.favorite_set` | `task_service.favorite_task` |
 
@@ -280,9 +280,10 @@ if task.status in ("succeeded", "failed", "canceled"):
 
 ## 十一、注意事项
 
-1. **同步上下文推送**：Mock 跑在后台线程，需 `asyncio.run_coroutine_threadsafe` 或统一 async service
+1. **同步上下文推送**：Callback Consumer 若在同步线程，需 `asyncio.run_coroutine_threadsafe` 或统一 async service
 2. **多 Tab**：同一 user 多个 WS，全部 `send_to_user`
-3. **开发 Mock**：`USE_MOCK=true` 时仍走 `send_to_user`，便于本地验证定向推送
-4. **不要用 Redis List 做主任务队列**：与 imggen 对接必须走 RocketMQ
+3. **WS 不感知 stub**：无论真实 imggen 还是 imggen-stub，推送都只发生在 UcubMQDraw 更新 DB 之后
+4. **WS 不是任务队列**：不接收业务命令，不模拟任务进度
+5. **不要用 Redis List 做主任务队列**：与 imggen 对接必须走 RocketMQ
 
 **完整可复制代码** → [examples/WebSocket推送示例.md](../examples/WebSocket推送示例.md)

@@ -1,4 +1,4 @@
-﻿# Merge all docs/**/*.md into project root 总.md
+﻿# Merge docs current markdown into project root 总.md (exclude archive/)
 $ErrorActionPreference = 'Stop'
 
 $projectRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -19,12 +19,15 @@ function Get-SortKey {
     if ($rel -notmatch '/') { return "01_$rel" }
     if ($rel -like 'details/*') { return "02_$rel" }
     if ($rel -like 'examples/*') { return "03_$rel" }
-    if ($rel -like 'archive/*') { return "99_$rel" }
     return "01_$rel"
 }
 
-$files = Get-ChildItem -Path $docsDir -Filter '*.md' -Recurse -File
-$files = $files | Sort-Object { Get-SortKey $_ }
+$files = Get-ChildItem -Path $docsDir -Filter '*.md' -Recurse -File |
+    Where-Object {
+        $rel = $_.FullName.Substring($docsDir.Length + 1).Replace('\', '/')
+        -not ($rel -like 'archive/*')
+    } |
+    Sort-Object { Get-SortKey $_ }
 
 $utf8NoBom = New-Object System.Text.UTF8Encoding $false
 $lines = New-Object System.Collections.Generic.List[string]
@@ -33,6 +36,7 @@ $now = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
 $lines.Add('# UcubMQDraw 文档合集')
 $lines.Add('')
 $lines.Add('> 由 merge-docs.bat 自动生成，请勿手工编辑。')
+$lines.Add('> 已排除 docs/archive/（旧稿仅查历史，禁止作实现依据）。')
 $lines.Add("> 生成时间：$now")
 $lines.Add("> 共 $($files.Count) 个文件")
 $lines.Add('')

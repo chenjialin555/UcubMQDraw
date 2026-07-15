@@ -52,7 +52,8 @@ Vue + FastAPI + PostgreSQL + Redis(Docker) + OSS(阿里云) + RocketMQ(阿里云
 用户：register / login / guest / me + JWT + tasks.user_id
 任务：POST 创建、GET 列表、GET 单条
 WS：token 鉴权、send_to_user、最小 onmessage + 断线重连
-工具：风格迁移、局部重绘（Mock 主链路）
+工具：风格迁移、局部重绘
+联调：RocketMQ + imggen-stub（禁止业务侧 Mock）
 ```
 
 ### Phase 2：体验增强
@@ -67,20 +68,16 @@ DELETE / rerun / cancel / favorite
 ### Phase 3：生产增强
 
 ```text
-OSS + RocketMQ 关 Mock
+切换真实 imggen（停 stub，同一 Topic）
 Redis Pub/Sub 多实例 WS
 登录限流、refreshToken、分页与筛选完善
 ```
 
-### 原 Mock 联调阶段（与 Phase 并行）
+### 联调原则
 
-```text
-阶段 A：Mock 主链路（db + 上传 + WS + 风格迁移）
-阶段 B：局部重绘
-阶段 C：接 OSS + MQ
-```
-
-`USE_MOCK=true` 本地可跳过 MQ；WS 仍建议 `send_to_user`。
+联调先启动 **imggen-stub**，保持 UcubMQDraw 走真实 MQ 链路。  
+前端不关心真实 imggen 还是 stub，只看任务状态与 WS 事件。  
+详见 [details/imggen-stub联调模式设计.md](./details/imggen-stub联调模式设计.md)。
 
 ---
 
@@ -106,7 +103,7 @@ backend/app/
 ├── db.py
 ├── api/          auth_api, task_api, upload_api, websocket_api
 ├── tools/        每个工具一个 .py + registry.py
-├── services/     task_service, upload_service, mq_service, mock_task_runner, websocket_manager
+├── services/     task_service, upload_service, mq_service, callback_service, websocket_manager
 └── models/       task_model.py
 ```
 
@@ -116,10 +113,11 @@ backend/app/
 docker-compose.yml              # PostgreSQL + Redis（本地 Docker）
 docker/postgres/init/01_init.sql
 backend/.env.example
+imggen-stub/                    # 本地假 imggen（独立服务）
 ```
 
 ```text
-本机：Vue、FastAPI
+本机：Vue、FastAPI、imggen-stub
 Docker：PostgreSQL、Redis
 阿里云：OSS、RocketMQ
 ```
@@ -138,8 +136,8 @@ Docker：PostgreSQL、Redis
 
 ```text
 上传图 → tool.buildRequest() → POST /tasks
-  → validate → 写 DB（含 user_id）→ RocketMQ / Mock
-  → imggen 回调 → 幂等更新 DB
+  → validate → 写 DB（含 user_id）→ RocketMQ
+  → imggen / imggen-stub 回调 → 幂等更新 DB
   → WS send_to_user → taskStore.upsertTask
 ```
 
@@ -171,7 +169,7 @@ Docker：PostgreSQL、Redis
 7. 新增 tool 只改 frontend/src/tools 与 backend/app/tools。
 8. 业务命令走 HTTP；WebSocket 只推事件，不在 WS 里删任务/再次生成。
 9. 任务队列走 RocketMQ，不用 Redis List。
-10. 联调先用 USE_MOCK=true。
+10. 联调用 imggen-stub，禁止业务侧 USE_MOCK 跳过 MQ。
 ```
 
 ---

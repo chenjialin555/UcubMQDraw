@@ -29,10 +29,12 @@ class Settings(BaseSettings):
     ROCKETMQ_RETRY_TIMES: int = 3
     ROCKETMQ_RETRY_BACKOFF_BASE: float = 0.5
     ROCKETMQ_RETRY_BACKOFF_MAX: float = 5.0
-    USE_MOCK: bool = True
+    ROCKETMQ_ENABLED: bool = True
 
 
 def mq_enabled() -> bool:
+    if not settings.ROCKETMQ_ENABLED:
+        return False
     return bool(
         settings.ROCKETMQ_NAME_SERVER
         and settings.ROCKETMQ_ACCESS_KEY
@@ -260,25 +262,28 @@ def handle_imggen_callback(message: dict) -> None:
 
 ```python
 await ws.send_task_event(user_id, "task.created", task)
-update_status(task_id, "dispatching", 5)
 
-if settings.USE_MOCK:
-    update_status(task_id, "queued", 10)
-    start_mock_task(task_id)
-else:
+task = update_status(task_id, "dispatching", 5)
+await ws.send_task_event(user_id, "task.updated", task)
+
+try:
     mq_service.send(task_dispatch_params, tool_key=tool.key)
     task = update_status(task_id, "queued", 10)
     await ws.send_task_event(user_id, "task.updated", task)
+except Exception:
+    task = mark_failed(task_id, "任务提交失败，请稍后重试")
+    await ws.send_task_event(user_id, "task.failed", task)
 ```
 
-推送使用 `send_to_user(task.user_id)`，不要全局 `broadcast`。
+推送使用 `send_to_user(task.user_id)`，不要全局 `broadcast`。  
+本地假生图用 imggen-stub，见 [imggen-stub示例.md](./imggen-stub示例.md)。
 
 ## 十、main.py lifespan
 
 ```python
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    if not settings.USE_MOCK:
+    if mq_enabled():
         start_callback_consumer()
     yield
     rocketmq_client.shutdown()

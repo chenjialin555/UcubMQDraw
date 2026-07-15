@@ -42,8 +42,9 @@
 2. details/用户与鉴权设计.md
 3. details/任务状态与任务流转.md  +  examples/任务状态与流转示例.md
 4. details/RocketMQ对接设计.md      +  examples/RocketMQ对接示例.md
-5. details/WebSocket推送机制.md     +  examples/WebSocket推送示例.md
-6. details/OSS上传设计.md           +  examples/OSS上传示例.md
+5. details/imggen-stub联调模式设计.md + examples/imggen-stub示例.md
+6. details/WebSocket推送机制.md     +  examples/WebSocket推送示例.md
+7. details/OSS上传设计.md           +  examples/OSS上传示例.md
 ```
 
 ## 专题细节（`details/`）
@@ -56,7 +57,7 @@
 | [WebSocket推送机制.md](./details/WebSocket推送机制.md) | 用户定向推送、Redis Pub/Sub（Phase 3） |
 | [OSS上传设计.md](./details/OSS上传设计.md) | 上传接口、OSS 配置（阿里云） |
 | [RocketMQ对接设计.md](./details/RocketMQ对接设计.md) | Topic、Producer、Consumer（阿里云） |
-| [Mock模式设计.md](./details/Mock模式设计.md) | 开发联调、模拟进度 |
+| [imggen-stub联调模式设计.md](./details/imggen-stub联调模式设计.md) | 本地假 imggen，走真实 MQ 链路（**禁止业务侧 Mock**） |
 | [部署与环境变量.md](./details/部署与环境变量.md) | Docker PostgreSQL/Redis、OSS、RocketMQ、.env |
 
 ## 示例代码（`examples/`）
@@ -70,26 +71,27 @@
 | [MaskEditor示例.md](./examples/MaskEditor示例.md) | 蒙版编辑与上传 |
 | [OSS上传示例.md](./examples/OSS上传示例.md) | oss_client、upload_api、ImageUploader |
 | [RocketMQ对接示例.md](./examples/RocketMQ对接示例.md) | Producer、Consumer、回调处理 |
+| [imggen-stub示例.md](./examples/imggen-stub示例.md) | stub 目录、消费 task、投递 callback |
 | [WebSocket推送示例.md](./examples/WebSocket推送示例.md) | **§二最小版** + 拆文件 ws/ + 分期增强 |
-| [任务状态与流转示例.md](./examples/任务状态与流转示例.md) | TaskCard、状态机、Mock 步进 |
+| [任务状态与流转示例.md](./examples/任务状态与流转示例.md) | TaskCard、状态机、callback 驱动 |
 
 ## 归档
 
 | 文档 | 内容 |
 |------|------|
-| [完整版方案归档.md](./archive/完整版方案归档.md) | 早期 3000+ 行完整方案，**仅查历史背景** |
-| [归档与现行规范差异.md](./archive/归档与现行规范差异.md) | 归档中已废弃或被现行规范替代的内容 |
+| [归档与现行规范差异.md](./archive/归档与现行规范差异.md) | **先读本文**：归档中已废弃内容一览 |
 | [features-to-tools术语对照.md](./archive/features-to-tools术语对照.md) | 旧 features 术语 → 现行 tools 术语 |
+| [AI生成的项目计划书.md](./archive/AI生成的项目计划书.md) | Gradio 时代立项稿；**禁止作实现依据**（旧 Mock / `completed` 已删可复制代码） |
+| [完整版方案归档.md](./archive/完整版方案归档.md) | 早期完整方案（若仍存在）；仅查历史背景 |
 
-> 读归档前请先读「归档与现行规范差异」和「features-to-tools术语对照」。
+> `docs/archive/` **不会**合并进项目根目录 `总.md`，避免旧稿污染日常检索。
 
 ## 其他参考
 
 | 文档 | 说明 |
 |------|------|
 | [mq_contract.md](./mq_contract.md) | imggen MQ 消息体字段（与 imggen 对齐） |
-| [AI生成的项目计划书.md](./AI生成的项目计划书.md) | 立项背景与 Gradio 时代规划（非日常入口） |
 
 ## 合并全文
 
-项目根目录运行 `merge-docs.bat` 可生成 [总.md](../总.md)（全部 docs 合并版，仅供离线阅读）。
+项目根目录运行 `./merge-docs.sh` 或 `merge-docs.bat` 可生成 [总.md](../总.md)（**不含** `docs/archive/`，仅供离线阅读现行文档）。
